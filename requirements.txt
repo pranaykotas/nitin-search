@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+numpy
+requests
+pydantic
+pytest
+httpx
+fastembed
+pyyaml
+google-auth
+google-auth-oauthlib
+google-api-python-client
