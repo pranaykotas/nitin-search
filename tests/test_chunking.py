@@ -27,3 +27,19 @@ def test_consecutive_chunks_share_overlap_words():
     first_tail = chunks[0].split()[-50:]
     second_head = chunks[1].split()[:50]
     assert first_tail == second_head
+
+
+def test_single_giant_paragraph_is_split_with_word_level_chunks():
+    """Test that a single oversized paragraph (no paragraph breaks) is split correctly.
+
+    This tests the word-level fallback: when a single paragraph exceeds max_words,
+    it must be split into fixed-size chunks with overlap, not buffered entirely.
+    """
+    para = " ".join([f"word{i}" for i in range(1000)])
+    text = para  # No \n\n breaks — single giant paragraph
+
+    chunks = sub_chunk(text, max_words=400, overlap_words=50)
+
+    assert len(chunks) >= 2
+    for chunk in chunks:
+        assert len(chunk.split()) <= 400 + 50
