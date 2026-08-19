@@ -69,7 +69,10 @@ def discover_post_urls(sitemap_url: str) -> list[str]:
 
 
 def fetch_post(url: str) -> Record | None:
-    resp = requests.get(url, headers=HEADERS, timeout=15)
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+    except requests.RequestException:
+        return None
     if resp.status_code != 200:
         return None
     html = resp.text

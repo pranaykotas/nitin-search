@@ -1,5 +1,7 @@
 from unittest.mock import Mock, patch
 
+import requests
+
 from ingest.blog import discover_post_urls, extract_date, fetch_post, html_to_text, ingest_blog
 from ingest.common import read_records
 
@@ -78,3 +80,28 @@ def test_ingest_blog_writes_records(tmp_path):
     records = read_records(out_path)
     assert len(records) == 2
     assert all(r.source == "blog" for r in records)
+
+
+def test_fetch_post_returns_none_on_request_exception():
+    with patch("ingest.blog.requests.get") as mock_get:
+        mock_get.side_effect = requests.exceptions.ConnectionError("Connection failed")
+        record = fetch_post("https://nitinpai.in/posts/broken")
+    assert record is None
+
+
+def test_ingest_blog_skips_failed_posts_and_writes_successful(tmp_path):
+    """Test that a network failure on one post doesn't lose successfully-fetched records."""
+    out_path = str(tmp_path / "test_resilient_ingest.json")
+    with patch("ingest.blog.requests.get") as mock_get:
+        mock_get.side_effect = [
+            Mock(status_code=200, text=SAMPLE_SITEMAP),  # sitemap fetch succeeds
+            Mock(status_code=200, text=SAMPLE_HTML),     # first post succeeds
+            requests.exceptions.Timeout("Request timeout"),  # second post fails with network error
+        ]
+        count = ingest_blog("https://nitinpai.in/sitemap.xml", out_path)
+
+    # Should have written 1 record (first post succeeds, second fails)
+    assert count == 1
+    records = read_records(out_path)
+    assert len(records) == 1
+    assert records[0].source == "blog"
