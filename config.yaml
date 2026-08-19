@@ -1,0 +1,15 @@
+blog:
+  sitemap_url: "https://nitinpai.in/sitemap.xml"
+
+obsidian:
+  vault_path: "/path/to/obsidian/vault"
+
+twitter:
+  tweets_js_path: "data/raw/tweets.js"
+  handle: "your_twitter_handle"
+  include_replies: false
+
+gmail:
+  enabled: true
+  client_secret_path: "client_secret.json"
+  token_path: "data/gmail_token.json"
