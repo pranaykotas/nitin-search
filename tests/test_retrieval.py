@@ -39,7 +39,7 @@ def test_search_diverse_ranks_by_similarity():
 
 
 def test_search_diverse_caps_dominant_source():
-    chunks = [{"source": "blog", "text": str(i)} for i in range(10)]
+    chunks = [{"source": "blog", "text": str(i), "reference": f"post-{i}"} for i in range(10)]
     vectors = np.tile(_unit([1, 0]), (10, 1))
     query = _unit([1, 0])
 
@@ -50,8 +50,8 @@ def test_search_diverse_caps_dominant_source():
 
 def test_search_diverse_backfills_floor_for_minority_source():
     chunks = (
-        [{"source": "blog", "text": str(i)} for i in range(9)]
-        + [{"source": "notes", "text": "n"}]
+        [{"source": "blog", "text": str(i), "reference": f"post-{i}"} for i in range(9)]
+        + [{"source": "notes", "text": "n", "reference": "note-1"}]
     )
     vectors = np.vstack([
         np.tile(_unit([1, 0]), (9, 1)),
@@ -63,6 +63,32 @@ def test_search_diverse_backfills_floor_for_minority_source():
 
     matched_sources = {chunks[idx]["source"] for idx, _ in matches}
     assert "notes" in matched_sources
+
+
+def test_search_diverse_caps_dominant_reference():
+    # Simulates overlapping chunks from one blog post crowding out other posts.
+    chunks = (
+        [{"source": "blog", "text": f"overlap-{i}", "reference": "post-A"} for i in range(5)]
+        + [{"source": "blog", "text": f"other-{i}", "reference": f"post-{i}"} for i in range(5)]
+    )
+    vectors = np.vstack([
+        np.tile(_unit([1, 0]), (5, 1)),
+        np.tile(_unit([0.99, 0.01]), (5, 1)),
+    ])
+    query = _unit([1, 0])
+
+    matches = search_diverse(
+        query, vectors, chunks, top_k=10, max_per_source=6, max_per_reference=2, min_similarity=0.0
+    )
+
+    reference_counts: dict[str, int] = {}
+    for idx, _ in matches:
+        ref = chunks[idx]["reference"]
+        reference_counts[ref] = reference_counts.get(ref, 0) + 1
+
+    assert reference_counts["post-A"] <= 2
+    # Other posts should still get through instead of being crowded out.
+    assert len(matches) >= 4
 
 
 def test_group_by_source_groups_and_attaches_score():

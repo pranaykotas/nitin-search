@@ -19,34 +19,46 @@ def search_diverse(
     top_k: int = 10,
     min_floor: int = 1,
     max_per_source: int = 6,
+    max_per_reference: int = 2,
     min_similarity: float = 0.25,
 ) -> list[tuple[int, float]]:
     """Return the top_k matches by relevance, capping any single source at
-    max_per_source and backfilling a floor of min_floor for sources that
-    would otherwise be shut out entirely."""
+    max_per_source, capping any single document (reference) at
+    max_per_reference so overlapping chunks from one document don't crowd
+    out other documents, and backfilling a floor of min_floor for sources
+    that would otherwise be shut out entirely."""
     if vectors.shape[0] == 0:
         return []
     sims = vectors @ query_vector
     order = [i for i in np.argsort(-sims) if sims[i] >= min_similarity]
 
     source_counts: dict[str, int] = {}
+    reference_counts: dict[str, int] = {}
     results: list[tuple[int, float]] = []
     for i in order:
         if len(results) >= top_k:
             break
         source = chunks[int(i)].get("source", "?")
+        reference = chunks[int(i)].get("reference", "?")
         if source_counts.get(source, 0) >= max_per_source:
             continue
+        if reference_counts.get(reference, 0) >= max_per_reference:
+            continue
         source_counts[source] = source_counts.get(source, 0) + 1
+        reference_counts[reference] = reference_counts.get(reference, 0) + 1
         results.append((int(i), float(sims[i])))
 
     for i in order:
         source = chunks[int(i)].get("source", "?")
+        reference = chunks[int(i)].get("reference", "?")
         if source_counts.get(source, 0) >= min_floor:
+            continue
+        if reference_counts.get(reference, 0) >= max_per_reference:
             continue
         if any(idx == int(i) for idx, _ in results):
             continue
         source_counts[source] = source_counts.get(source, 0) + 1
+        reference_counts[reference] = reference_counts.get(reference, 0) + 1
         results.append((int(i), float(sims[i])))
 
     results.sort(key=lambda x: -x[1])
