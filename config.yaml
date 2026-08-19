@@ -5,11 +5,11 @@ obsidian:
   vault_path: "/path/to/obsidian/vault"
 
 twitter:
-  tweets_js_path: "data/raw/tweets.js"
+  tweets_js_path: ""
   handle: "your_twitter_handle"
   include_replies: false
 
 gmail:
-  enabled: true
+  enabled: false
   client_secret_path: "client_secret.json"
   token_path: "data/gmail_token.json"
