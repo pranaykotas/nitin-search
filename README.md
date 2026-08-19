@@ -19,8 +19,8 @@ hosted publicly, and email content is never sent to any external API.
    - `obsidian.vault_path`: full path to your Obsidian vault folder
    - `twitter.handle`: your X/Twitter handle
 5. **Twitter**: go to X Settings → Your Account → Download an archive.
-   Once it arrives (can take a day), unzip it and copy `data/tweets.js`
-   from inside the archive to `data/raw/tweets.js` in this repo.
+   Once it arrives (can take a day), unzip it. Create the directory `mkdir -p data/raw`,
+   then copy `data/tweets.js` from inside the archive to `data/raw/tweets.js` in this repo.
 6. **Gmail**: go to console.cloud.google.com, create a project, enable the
    Gmail API, create OAuth credentials (Desktop app type), download the
    JSON file and save it as `client_secret.json` in this repo's root. The
