@@ -9,12 +9,18 @@ from ingest.common import Record, write_records
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 MIN_WORDS = 150
-QUOTE_MARKERS = ("\nOn ", "\n> ", "\n-----Original Message-----", "\nFrom: ")
+QUOTE_MARKERS = (
+    "\nOn ",
+    "\n> ",
+    "\n-----Original Message-----",
+    "\nFrom: ",
+    "\n---------- Forwarded message ---------",
+)
 
 
 def strip_quoted_reply(body: str) -> str:
     cut_points = [body.find(marker) for marker in QUOTE_MARKERS if marker in body]
-    cut_points = [p for p in cut_points if p > 0]
+    cut_points = [p for p in cut_points if p >= 0]
     if cut_points:
         body = body[: min(cut_points)]
     return body.strip()
@@ -26,16 +32,27 @@ def decode_body(payload: dict) -> str:
             if part.get("mimeType") == "text/plain":
                 data = part.get("body", {}).get("data")
                 if data:
-                    return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+                    try:
+                        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+                    except Exception:
+                        continue
         for part in payload["parts"]:
             text = decode_body(part)
             if text:
                 return text
         return ""
+    # Leaf branch: if mimeType is explicitly HTML, skip it (never index unstripped HTML)
+    # If no mimeType, assume text/plain (backwards compatible with simple Gmail messages)
+    mime = payload.get("mimeType", "text/plain")
+    if mime.startswith("text/html"):
+        return ""
     data = payload.get("body", {}).get("data")
     if not data:
         return ""
-    return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+    try:
+        return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
 
 
 def message_to_record(msg: dict) -> Record | None:

@@ -60,3 +60,38 @@ def test_message_to_record_builds_record_for_substantive_message():
     assert record.source == "sent_mail"
     assert record.title == "Thoughts on federalism"
     assert record.reference == "gmail:abc123"
+
+
+def test_strip_quoted_reply_quote_marker_at_index_zero():
+    # Critical bug 1: quote marker at index 0 should result in empty string,
+    # not return the full quoted body unstripped
+    quoted_text = " ".join(["quote"] * 200)
+    body = f"\nOn Mon, Jan 1, 2024, Someone wrote:\n{quoted_text}"
+    result = strip_quoted_reply(body)
+    # Should be empty or near-empty, not the full quoted text
+    assert len(result.split()) < 150
+
+
+def test_decode_body_rejects_html_only_message():
+    # Critical bug 2: HTML-only messages should not be decoded
+    html_text = "<html><body>This is <b>HTML</b> content</body></html>"
+    encoded = base64.urlsafe_b64encode(html_text.encode("utf-8")).decode("ascii")
+    payload = {"mimeType": "text/html", "body": {"data": encoded}}
+    result = decode_body(payload)
+    # Should return empty string, not the raw HTML
+    assert result == ""
+
+
+def test_strip_quoted_reply_detects_forwarded_message_marker():
+    # Important 3: Gmail forwarded message marker should be detected
+    body = "My response here.\n\n---------- Forwarded message ---------\nFrom: someone\n> forwarded content"
+    result = strip_quoted_reply(body)
+    assert result == "My response here."
+
+
+def test_decode_body_handles_invalid_base64():
+    # Important 4: malformed base64 should not crash, should return empty string
+    payload = {"body": {"data": "!!!invalid base64!!!"}}
+    result = decode_body(payload)
+    # Should return empty string, not raise an exception
+    assert result == ""
