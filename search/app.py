@@ -42,7 +42,13 @@ def ask(payload: AskRequest):
     top_k = int(os.environ.get("TOP_K", "10"))
     min_similarity = float(os.environ.get("MIN_SIMILARITY", "0.20"))
 
-    index = get_index()
+    try:
+        index = get_index()
+    except FileNotFoundError:
+        return {
+            "error": "no_index",
+            "message": "No search index yet — run `python build_all.py` first.",
+        }
     query_vector = embed_texts([question])[0]
     matches = search_diverse(query_vector, index["vectors"], index["chunks"], top_k=top_k, min_similarity=min_similarity)
 

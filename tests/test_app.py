@@ -58,3 +58,20 @@ def test_ask_empty_question_returns_error(client):
     test_client, _ = client
     response = test_client.post("/ask", json={"question": "   "})
     assert response.json()["error"] == "empty_question"
+
+
+def test_ask_missing_index_returns_friendly_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHUNKS_PATH", str(tmp_path / "does-not-exist-chunks.json"))
+    monkeypatch.setenv("VECTORS_PATH", str(tmp_path / "does-not-exist-vectors.npy"))
+
+    from search import app as app_module
+    app_module._index_cache = None
+
+    with patch("search.app.embed_texts", return_value=np.array([[1.0, 0.0]], dtype=np.float32)):
+        test_client = TestClient(app_module.app)
+        response = test_client.post("/ask", json={"question": "fiscal federalism"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["error"] == "no_index"
+    assert "build_all.py" in body["message"]
