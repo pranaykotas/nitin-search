@@ -1616,10 +1616,6 @@ from indexing.embed import embed_texts
 from search.llm import generate_connector
 from search.retrieval import group_by_source, load_index, search_diverse
 
-CHUNKS_PATH = os.environ.get("CHUNKS_PATH", "data/chunks.json")
-VECTORS_PATH = os.environ.get("VECTORS_PATH", "data/vectors.npy")
-MIN_SIMILARITY = float(os.environ.get("MIN_SIMILARITY", "0.20"))
-TOP_K = int(os.environ.get("TOP_K", "10"))
 NO_CONNECTOR_SOURCES = {"sent_mail"}
 
 app = FastAPI()
@@ -1630,7 +1626,9 @@ _index_cache: dict | None = None
 def get_index() -> dict:
     global _index_cache
     if _index_cache is None:
-        chunks, vectors = load_index(CHUNKS_PATH, VECTORS_PATH)
+        chunks_path = os.environ.get("CHUNKS_PATH", "data/chunks.json")
+        vectors_path = os.environ.get("VECTORS_PATH", "data/vectors.npy")
+        chunks, vectors = load_index(chunks_path, vectors_path)
         _index_cache = {"chunks": chunks, "vectors": vectors}
     return _index_cache
 
@@ -1645,9 +1643,12 @@ def ask(payload: AskRequest):
     if not question:
         return {"error": "empty_question", "message": "Ask a question first."}
 
+    top_k = int(os.environ.get("TOP_K", "10"))
+    min_similarity = float(os.environ.get("MIN_SIMILARITY", "0.20"))
+
     index = get_index()
     query_vector = embed_texts([question])[0]
-    matches = search_diverse(query_vector, index["vectors"], index["chunks"], top_k=TOP_K, min_similarity=MIN_SIMILARITY)
+    matches = search_diverse(query_vector, index["vectors"], index["chunks"], top_k=top_k, min_similarity=min_similarity)
 
     if not matches:
         return {"groups": [], "message": "Nothing in the archive matches this yet."}
@@ -1779,9 +1780,15 @@ git commit -m "feat: add FastAPI /ask endpoint with Gmail-privacy connector rule
       html += '<div class="excerpts">';
       for (var i = 0; i < group.excerpts.length; i++) {
         var ex = group.excerpts[i];
+        var isLink = ex.reference && ex.reference.indexOf("http") === 0;
+        var metaContent = escapeHtml(ex.title) + " · " + escapeHtml(formatDate(ex.date));
         html += '<div class="excerpt">';
         html += '<p class="excerpt-text">' + escapeHtml(truncate(ex.text, 400)) + "</p>";
-        html += '<div class="excerpt-meta">' + escapeHtml(ex.title) + " · " + escapeHtml(formatDate(ex.date)) + "</div>";
+        if (isLink) {
+          html += '<a class="excerpt-meta" href="' + escapeHtml(ex.reference) + '" target="_blank" rel="noopener">' + metaContent + "</a>";
+        } else {
+          html += '<div class="excerpt-meta">' + metaContent + "</div>";
+        }
         html += "</div>";
       }
       html += "</div></div>";
