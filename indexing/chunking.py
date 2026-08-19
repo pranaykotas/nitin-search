@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+MAX_CHUNK_WORDS = 400
+OVERLAP_WORDS = 50
+
+
+def sub_chunk(text: str, max_words: int = MAX_CHUNK_WORDS, overlap_words: int = OVERLAP_WORDS) -> list[str]:
+    """Split text into overlapping sub-chunks by word count.
+
+    Short texts are returned as-is. Longer texts are split at paragraph
+    boundaries where possible, with word-level fallback.
+    """
+    words = text.split()
+    if len(words) <= max_words:
+        return [text]
+
+    paragraphs = text.split("\n\n")
+    sub_chunks: list[str] = []
+    current_words: list[str] = []
+
+    for para in paragraphs:
+        para_words = para.split()
+        if current_words and len(current_words) + len(para_words) > max_words:
+            sub_chunks.append(" ".join(current_words))
+            overlap = current_words[-overlap_words:] if len(current_words) > overlap_words else []
+            current_words = overlap + para_words
+        else:
+            current_words.extend(para_words)
+
+    if current_words:
+        sub_chunks.append(" ".join(current_words))
+
+    return sub_chunks if sub_chunks else [text]
