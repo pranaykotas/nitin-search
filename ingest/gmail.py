@@ -90,11 +90,15 @@ def ingest_gmail(token_path: str, client_secret_path: str, out_path: str, max_me
     service = build("gmail", "v1", credentials=creds)
 
     records = []
+    fetched = 0
     request = service.users().messages().list(userId="me", q="in:sent", maxResults=min(500, max_messages))
-    while request is not None and len(records) < max_messages:
+    while request is not None and fetched < max_messages:
         response = request.execute()
         for item in response.get("messages", []):
+            if fetched >= max_messages:
+                break
             msg = service.users().messages().get(userId="me", id=item["id"], format="full").execute()
+            fetched += 1
             record = message_to_record(msg)
             if record:
                 records.append(record)

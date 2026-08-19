@@ -1,6 +1,7 @@
 import base64
+from unittest.mock import patch
 
-from ingest.gmail import decode_body, message_to_record, strip_quoted_reply
+from ingest.gmail import decode_body, ingest_gmail, message_to_record, strip_quoted_reply
 
 
 def test_strip_quoted_reply_cuts_at_on_wrote():
@@ -95,3 +96,81 @@ def test_decode_body_handles_invalid_base64():
     result = decode_body(payload)
     # Should return empty string, not raise an exception
     assert result == ""
+
+
+class _FakeRequest:
+    def __init__(self, value):
+        self.value = value
+
+    def execute(self):
+        return self.value
+
+
+class _FakeMessagesResource:
+    """Fakes service.users().messages() with paginated short (filtered-out)
+    messages, so we can confirm max_messages bounds the number of .get()
+    calls rather than the number of records that survive the word filter."""
+
+    def __init__(self, pages, get_calls):
+        self.pages = pages
+        self.get_calls = get_calls
+
+    def list(self, userId, q, maxResults):
+        return _FakeRequest(self.pages[0])
+
+    def get(self, userId, id, format):
+        self.get_calls.append(id)
+        short_text = "Too short to be kept."
+        encoded = base64.urlsafe_b64encode(short_text.encode("utf-8")).decode("ascii")
+        msg = {
+            "id": id,
+            "payload": {
+                "headers": [{"name": "Subject", "value": "quick note"}, {"name": "Date", "value": "Mon, 1 Jan 2024"}],
+                "body": {"data": encoded},
+            },
+        }
+        return _FakeRequest(msg)
+
+    def list_next(self, previous_request, previous_response):
+        idx = self.pages.index(previous_response) + 1
+        if idx < len(self.pages):
+            return _FakeRequest(self.pages[idx])
+        return None
+
+
+class _FakeUsers:
+    def __init__(self, messages_resource):
+        self._messages = messages_resource
+
+    def messages(self):
+        return self._messages
+
+
+class _FakeService:
+    def __init__(self, messages_resource):
+        self._users = _FakeUsers(messages_resource)
+
+    def users(self):
+        return self._users
+
+
+def test_ingest_gmail_bounds_fetch_calls_by_max_messages_not_kept_records(tmp_path):
+    # 6 pages of 5 message ids each = 30 total ids available, but every
+    # message is short and gets filtered out by message_to_record. Important
+    # 6: the loop must stop fetching once max_messages GETs have happened,
+    # not keep paginating through the whole mailbox looking for keepers.
+    pages = [
+        {"messages": [{"id": f"m{page}-{i}"} for i in range(5)]}
+        for page in range(6)
+    ]
+    get_calls: list[str] = []
+    fake_service = _FakeService(_FakeMessagesResource(pages, get_calls))
+
+    out_path = str(tmp_path / "sent_mail.json")
+
+    with patch("ingest.gmail.get_credentials", return_value=object()), \
+         patch("googleapiclient.discovery.build", return_value=fake_service):
+        count = ingest_gmail("token.json", "client_secret.json", out_path, max_messages=10)
+
+    assert len(get_calls) == 10
+    assert count == 0
